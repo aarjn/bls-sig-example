@@ -1,4 +1,5 @@
 use solana_bls_signatures::{
+    error::BlsError::VerificationFailed,
     keypair::Keypair,
     pubkey::VerifySignature,
     signature::{
@@ -6,8 +7,8 @@ use solana_bls_signatures::{
     },
 };
 
-use alpenglow::ValidatorIndex;
 use alpenglow::crypto::aggsig::{AggregateSignature, SecretKey};
+use alpenglow::ValidatorIndex;
 
 fn main() {
     let keypair = Keypair::new();
@@ -37,12 +38,16 @@ fn main() {
         .verify_signature(&sig_uncompressed, message)
         .unwrap();
 
-    sig_projective.verify(&keypair2.public, message).unwrap();
+    assert_eq!(
+        sig_projective.verify(&keypair2.public, message),
+        Err(VerificationFailed),
+    );
+
     sig_affine.verify(&keypair.public, message).unwrap();
     sig_compressed.verify(&keypair.public, message).unwrap();
     sig_uncompressed.verify(&keypair.public, message).unwrap();
 
-    // Alpenglow
+    // qkniep/alpenglow
     let msg = b"solana is not a chain";
 
     let sk1 = SecretKey::new(&mut rand::rng());
@@ -53,10 +58,18 @@ fn main() {
     let pk2 = sk2.to_pk();
     let sig2 = sk2.sign_bytes(msg);
 
-    let mut aggsig = AggregateSignature::new(
-        &[sig1, sig2],
-        [ValidatorIndex::new(0), ValidatorIndex::new(1)],
-        2,
+    let sk3 = SecretKey::new(&mut rand::rng());
+    let pk3 = sk3.to_pk();
+    let sig3 = sk3.sign_bytes(msg);
+
+    let aggsig = AggregateSignature::new(
+        &[sig1, sig2, sig3],
+        [
+            ValidatorIndex::new(0),
+            ValidatorIndex::new(1),
+            ValidatorIndex::new(2),
+        ],
+        3,
     );
-    assert!(aggsig.verify_bytes(msg, &[pk1, pk2]));
+    assert!(aggsig.verify_bytes(msg, &[pk1, pk2, pk3]));
 }
